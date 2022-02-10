@@ -27,22 +27,50 @@ struct lexeme {
     };
 };
 
-enum ast_node_type {
-    AST_SEQUENCE,
-    AST_LET,
-    AST_IDENTIFIER,
-    AST_INT_LITERAL,
-    AST_ADD,
-    AST_SUB,
+enum ast_expr_node_type {
+    AST_EXPR_VARIABLE,
+    AST_EXPR_INT_LITERAL,
+    AST_EXPR_BINARY_OP,
 };
 
-struct ast_node {
-    enum ast_node_type type;
+enum ast_binary_op_type {
+    AST_BINARY_OP_ADD,
+    AST_BINARY_OP_SUB,
+};
+
+struct ast_expr_node {
+    enum ast_expr_node_type type;
     union {
-        const char* string;
-        uint64_t number;
-        struct ast_node* binary_children[2];
+        const char* variable;
+        uint64_t int_literal;
+        struct {
+            enum ast_binary_op_type type;
+            struct ast_expr_node* children[2];
+        } binary_op;
     };
+};
+
+enum ast_stmt_node_type {
+    AST_STMT_LET,
+    AST_STMT_SEQUENCE,
+};
+
+struct ast_stmt_node {
+    enum ast_stmt_node_type type;
+    union {
+        struct {
+            const char* name;
+            struct ast_expr_node* expr;
+        } let;
+        struct {
+            struct ast_stmt_node* children[2];
+        } sequence;
+    };
+};
+
+union ast_node {
+    struct ast_expr_node expr;
+    struct ast_stmt_node stmt;
 };
 
 #define PROGRAM_MAX_SIZE 65536

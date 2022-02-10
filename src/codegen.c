@@ -49,67 +49,48 @@ static const uint8_t program_exit[] = {
     0x0f, 0x05,           // syscall
 };
 
-static struct ast_node ast_nodes[] = {
-    [0] = { .type = AST_SEQUENCE, .binary_children = { &ast_nodes[10], &ast_nodes[1] }, },
-    [1] = { .type = AST_SEQUENCE, .binary_children = { &ast_nodes[20], &ast_nodes[2] }, },
-    [2] = { .type = AST_SEQUENCE, .binary_children = { &ast_nodes[30], &ast_nodes[40] }, },
-
-    [10] = { .type = AST_LET, .binary_children = { &ast_nodes[11], &ast_nodes[12] }, },
-    [11] = { .type = AST_IDENTIFIER, .string = "a", },
-    [12] = { .type = AST_ADD, .binary_children = { &ast_nodes[13], &ast_nodes[14] }, },
-    [13] = { .type = AST_INT_LITERAL, .number = 0x11, },
-    [14] = { .type = AST_INT_LITERAL, .number = 0x22, },
-
-    [20] = { .type = AST_LET, .binary_children = { &ast_nodes[21], &ast_nodes[22] }, },
-    [21] = { .type = AST_IDENTIFIER, .string = "b", },
-    [22] = { .type = AST_SUB, .binary_children = { &ast_nodes[23], &ast_nodes[24] }, },
-    [23] = { .type = AST_INT_LITERAL, .number = 0x100000011, },
-    [24] = { .type = AST_INT_LITERAL, .number =  0xffffffff, },
-
-    [30] = { .type = AST_LET, .binary_children = { &ast_nodes[31], &ast_nodes[32] }, },
-    [31] = { .type = AST_IDENTIFIER, .string = "c", },
-    [32] = { .type = AST_ADD, .binary_children = { &ast_nodes[33], &ast_nodes[34] }, },
-    [33] = { .type = AST_INT_LITERAL, .number = 0x1000, },
-    [34] = { .type = AST_SUB, .binary_children = { &ast_nodes[35], &ast_nodes[38] }, },
-    [35] = { .type = AST_SUB, .binary_children = { &ast_nodes[36], &ast_nodes[37] }, },
-    [36] = { .type = AST_INT_LITERAL, .number = 0x55, },
-    [37] = { .type = AST_INT_LITERAL, .number = 0x11, },
-    [38] = { .type = AST_INT_LITERAL, .number = 0x33, },
-
-    [40] = { .type = AST_LET, .binary_children = { &ast_nodes[41], &ast_nodes[42] }, },
-    [41] = { .type = AST_IDENTIFIER, .string = "d", },
-    [42] = { .type = AST_SUB, .binary_children = { &ast_nodes[43], &ast_nodes[44] }, },
-    [43] = { .type = AST_IDENTIFIER, .string = "c", },
-    [44] = { .type = AST_ADD, .binary_children = { &ast_nodes[45], &ast_nodes[46] }, },
-    [45] = { .type = AST_IDENTIFIER, .string = "a", },
-    [46] = { .type = AST_IDENTIFIER, .string = "b", },
+static union ast_node ast_nodes[] = {
+    [0] = { .stmt = {
+        .type = AST_STMT_LET,
+        .let = { .name = "a", .expr = &ast_nodes[12].expr }
+    }},
+    [12] = { .expr = {
+        .type = AST_EXPR_BINARY_OP,
+        .binary_op = { .type = AST_BINARY_OP_ADD, .children = { &ast_nodes[13].expr, &ast_nodes[14].expr }}
+    }},
+    [13] = { .expr = { .type = AST_EXPR_INT_LITERAL, .int_literal = 0x11 }},
+    [14] = { .expr = { .type = AST_EXPR_INT_LITERAL, .int_literal = 0x22 }},
 };
 
-static void codegen_from_node(struct ast_node*);
+static void codegen_from_stmt(struct ast_stmt_node*);
+static void codegen_from_expr(struct ast_expr_node*);
 
 size_t generate_code() {
     program_push(program_start);
-    codegen_from_node(ast_nodes);
+    codegen_from_stmt(&ast_nodes[0].stmt);
     program_push(program_exit);
     return program_next_byte - program;
 }
 
-static void codegen_from_node(struct ast_node* node) {
-    switch (node->type) {
-        case AST_SEQUENCE:
-            codegen_from_node(node->binary_children[0]);
-            codegen_from_node(node->binary_children[1]);
-            break;
-
-        case AST_LET:
-            codegen_from_node(node->binary_children[1]);
+static void codegen_from_stmt(struct ast_stmt_node* stmt) {
+    switch (stmt->type) {
+        case AST_STMT_LET:
+            codegen_from_expr(stmt->let.expr);
             program_push(((uint8_t[]) { 0x50 }));  // push rax
-            assert(node->binary_children[0]->type == AST_IDENTIFIER);
-            local_variable_push(node->binary_children[0]->string);
+            local_variable_push(stmt->let.name);
             break;
 
-        case AST_IDENTIFIER: {
-            const char** p = local_variable_find(node->string);
+        case AST_STMT_SEQUENCE:
+            codegen_from_stmt(stmt->sequence.children[0]);
+            codegen_from_stmt(stmt->sequence.children[1]);
+            break;
+    }
+}
+
+static void codegen_from_expr(struct ast_expr_node* expr) {
+    switch (expr->type) {
+        case AST_EXPR_VARIABLE: {
+            const char** p = local_variable_find(expr->variable);
             if (p == NULL) {
                 compiler_error("Variable not found");
             }
@@ -124,36 +105,37 @@ static void codegen_from_node(struct ast_node* node) {
             break;
         }
 
-        case AST_INT_LITERAL:
-            if (node->number <= 0xFFFFFFFF) {
+        case AST_EXPR_INT_LITERAL:
+            if (expr->int_literal <= 0xFFFFFFFF) {
                 static uint8_t buf[] = { 0xb8, 0, 0, 0, 0 }; // mov eax, __
-                *((uint32_t*) (buf + 1)) = (uint32_t) node->number;
+                *((uint32_t*) (buf + 1)) = (uint32_t) expr->int_literal;
                 program_push(buf);
             } else {
                 static uint8_t buf[] = { 0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0 }; // mov rax, __
-                *((uint64_t*) (buf + 2)) = node->number;
+                *((uint64_t*) (buf + 2)) = expr->int_literal;
                 program_push(buf);
             }
             break;
 
-        case AST_ADD:
-            codegen_from_node(node->binary_children[1]);
+        case AST_EXPR_BINARY_OP:
+            codegen_from_expr(expr->binary_op.children[1]);
             program_push(((uint8_t[]) { 0x50 }));  // push rax
-            codegen_from_node(node->binary_children[0]);
-            program_push(((uint8_t[]) {
-                0x5b,              // pop rbx
-                0x48, 0x01, 0xd8,  // add rax, rbx
-            }));
-            break;
+            codegen_from_expr(expr->binary_op.children[0]);
+            program_push(((uint8_t[]) { 0x5b }));  // pop rbx
 
-        case AST_SUB:
-            codegen_from_node(node->binary_children[1]);
-            program_push(((uint8_t[]) { 0x50 }));  // push rax
-            codegen_from_node(node->binary_children[0]);
-            program_push(((uint8_t[]) {
-                0x5b,              // pop rbx
-                0x48, 0x29, 0xd8,  // sub rax, rbx
-            }));
+            switch (expr->binary_op.type) {
+                case AST_BINARY_OP_ADD:
+                    program_push(((uint8_t[]) {
+                        0x48, 0x01, 0xd8,  // add rax, rbx
+                    }));
+                    break;
+
+                case AST_BINARY_OP_SUB:
+                    program_push(((uint8_t[]) {
+                        0x48, 0x29, 0xd8,  // sub rax, rbx
+                    }));
+                    break;
+            }
             break;
     }
 }
