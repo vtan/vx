@@ -20,8 +20,14 @@
     (vec).size += ARRAY_SIZEOF(array); \
 }
 #define VEC_BYTES(vec) ((vec).size * sizeof((vec).buf[0]))
+#define VEC_LAST(vec) (&(vec).buf[(vec).size - 1])
 
-void compiler_error(const char*);
+struct source_location {
+    uint32_t line;
+    uint32_t column;
+};
+
+_Noreturn void compiler_error(struct source_location*, const char*);
 
 enum lexeme_type {
     LEX_PAREN_OPEN,
@@ -32,6 +38,7 @@ enum lexeme_type {
 
 struct lexeme {
     enum lexeme_type type;
+    struct source_location source_location;
     union {
         const char* word;
         uint64_t int_literal;
@@ -51,6 +58,7 @@ enum ast_binary_op_type {
 
 struct ast_expr_node {
     enum ast_expr_node_type type;
+    struct source_location source_location;
     union {
         const char* variable;
         uint64_t int_literal;
@@ -68,6 +76,7 @@ enum ast_stmt_node_type {
 
 struct ast_stmt_node {
     enum ast_stmt_node_type type;
+    struct source_location source_location;
     union {
         struct {
             const char* name;
@@ -84,14 +93,19 @@ union ast_node {
     struct ast_stmt_node stmt;
 };
 
+#define LEXEMES_MAX_SZE 8192
+struct lexemes {
+    size_t size;
+    struct lexeme buf[LEXEMES_MAX_SZE];
+};
+extern struct lexemes lexemes;
+
 #define AST_MAX_SIZE 4096
 struct ast {
     size_t size;
     union ast_node buf[AST_MAX_SIZE];
 };
 extern struct ast ast;
-
-struct ast_stmt_node* parse_lexemes();
 
 #define PROGRAM_MAX_SIZE 65536
 struct program {
@@ -100,6 +114,6 @@ struct program {
 };
 extern struct program program;
 
-void generate_code();
-
+struct ast_stmt_node* parse_lexemes();
+void generate_code(struct ast_stmt_node* ast_root);
 void write_elf();

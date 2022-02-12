@@ -35,25 +35,12 @@ static const uint8_t program_exit[] = {
     0x0f, 0x05,           // syscall
 };
 
-static union ast_node ast_nodes[] = {
-    [0] = { .stmt = {
-        .type = AST_STMT_LET,
-        .let = { .name = "a", .expr = &ast_nodes[12].expr }
-    }},
-    [12] = { .expr = {
-        .type = AST_EXPR_BINARY_OP,
-        .binary_op = { .type = AST_BINARY_OP_ADD, .children = { &ast_nodes[13].expr, &ast_nodes[14].expr }}
-    }},
-    [13] = { .expr = { .type = AST_EXPR_INT_LITERAL, .int_literal = 0x11 }},
-    [14] = { .expr = { .type = AST_EXPR_INT_LITERAL, .int_literal = 0x22 }},
-};
-
 static void codegen_from_stmt(struct ast_stmt_node*);
 static void codegen_from_expr(struct ast_expr_node*);
 
-void generate_code() {
+void generate_code(struct ast_stmt_node* ast_root) {
     program_append(program_start);
-    codegen_from_stmt(&ast_nodes[0].stmt);
+    codegen_from_stmt(ast_root);
     program_append(program_exit);
 }
 
@@ -77,11 +64,11 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
         case AST_EXPR_VARIABLE: {
             const char** p = find_local_variable(expr->variable);
             if (p == NULL) {
-                compiler_error("Variable not found");
+                compiler_error(&expr->source_location, "Variable not found");
             }
             int offset = p - local_variables.buf;
             if (offset > 15) {
-                compiler_error("Too many variables");
+                compiler_error(&expr->source_location, "Too many variables");
             }
             int rbp_offset = 0xf8 - offset * 8;
             static uint8_t buf[] = { 0x48, 0x8b, 0x45, 0 }; // mov rax, [rbp - __]
