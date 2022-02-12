@@ -6,14 +6,14 @@ struct state {
     size_t next_lexeme_index;
 };
 
-struct ast_stmt_node* parse_statement(struct state* state);
-struct ast_expr_node* parse_expression(struct state* state);
+static struct ast_stmt_node* parse_statement(struct state* state);
+static struct ast_expr_node* parse_expression(struct state* state);
 
-struct lexeme* next_lexeme(struct state* state);
-struct lexeme* advance_lexeme(struct state* state);
-struct lexeme* expect_paren_open(struct state* state);
-void expect_paren_close(struct state* state);
-struct lexeme* expect_word(struct state* state);
+static struct lexeme* next_lexeme(struct state* state);
+static struct lexeme* advance_lexeme(struct state* state);
+static struct lexeme* expect_paren_open(struct state* state);
+static void expect_paren_close(struct state* state);
+static struct lexeme* expect_word(struct state* state);
 
 struct ast_stmt_node* parse_lexemes() {
     struct state state = {
@@ -34,16 +34,16 @@ struct ast_stmt_node* parse_statement(struct state* state) {
     struct lexeme* next = advance_lexeme(state);
     switch (next->type) {
         case LEX_WORD:
-            if (strcmp(next->word, "let") == 0) {
+            if (strcmp(next->word, "let") == 0 || strcmp(next->word, "set") == 0) {
                 // TODO: check if not keyword
                 struct lexeme* variable_name = expect_word(state);
                 struct ast_expr_node* expr = parse_expression(state);
                 VEC_PUSH(ast, ((union ast_node) {
                     .stmt = {
-                        .type = AST_STMT_LET,
+                        .type = strcmp(next->word, "let") == 0 ? AST_STMT_LET : AST_STMT_SET,
                         .source_location = open_paren->source_location,
                         .let = {
-                            .name = variable_name->word,
+                            .name = variable_name,
                             .expr = expr,
                         },
                     }
@@ -115,7 +115,7 @@ struct ast_expr_node* parse_expression(struct state* state) {
                 .expr = {
                     .type = AST_EXPR_VARIABLE,
                     .source_location = lexeme->source_location,
-                    .variable = lexeme->word,
+                    .variable = lexeme,
                 }
             }));
             return &VEC_LAST(ast)->expr;

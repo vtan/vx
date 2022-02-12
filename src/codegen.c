@@ -37,6 +37,7 @@ static const uint8_t program_exit[] = {
 
 static void codegen_from_stmt(struct ast_stmt_node*);
 static void codegen_from_expr(struct ast_expr_node*);
+static uint8_t rbp_offset_of_variable(struct lexeme*);
 
 void generate_code(struct ast_stmt_node* ast_root) {
     program_append(program_start);
@@ -47,10 +48,25 @@ void generate_code(struct ast_stmt_node* ast_root) {
 static void codegen_from_stmt(struct ast_stmt_node* stmt) {
     switch (stmt->type) {
         case AST_STMT_LET:
+            if (find_local_variable(stmt->let.name->word) != NULL) {
+                compiler_error(
+                    &stmt->source_location,
+                    "Variable is already defined. Use set instead of let to assign a new value"
+                );
+            }
             codegen_from_expr(stmt->let.expr);
             program_append(((uint8_t[]) { 0x50 }));  // push rax
-            VEC_PUSH(local_variables, stmt->let.name);
+            VEC_PUSH(local_variables, stmt->let.name->word);
             break;
+
+        case AST_STMT_SET: {
+            codegen_from_expr(stmt->set.expr);
+            static uint8_t buf[] = { 0x48, 0x89, 0x45, 0 }; // mov [rbp - __], rax
+            int rbp_offset = rbp_offset_of_variable(stmt->set.name);
+            buf[3] = (uint8_t) rbp_offset;
+            program_append(buf);
+            break;
+        }
 
         case AST_STMT_SEQUENCE:
             assert(stmt->sequence.children[0] != NULL);
@@ -65,16 +81,8 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
 static void codegen_from_expr(struct ast_expr_node* expr) {
     switch (expr->type) {
         case AST_EXPR_VARIABLE: {
-            const char** p = find_local_variable(expr->variable);
-            if (p == NULL) {
-                compiler_error(&expr->source_location, "Variable not found");
-            }
-            int offset = p - local_variables.buf;
-            if (offset > 15) {
-                compiler_error(&expr->source_location, "Too many variables");
-            }
-            int rbp_offset = 0xf8 - offset * 8;
             static uint8_t buf[] = { 0x48, 0x8b, 0x45, 0 }; // mov rax, [rbp - __]
+            int rbp_offset = rbp_offset_of_variable(expr->variable);
             buf[3] = (uint8_t) rbp_offset;
             program_append(buf);
             break;
@@ -113,4 +121,16 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
             }
             break;
     }
+}
+
+static uint8_t rbp_offset_of_variable(struct lexeme* lexeme) {
+    const char** p = find_local_variable(lexeme->word);
+    if (p == NULL) {
+        compiler_error(&lexeme->source_location, "Variable not found");
+    }
+    int offset = p - local_variables.buf;
+    if (offset > 15) {
+        compiler_error(&lexeme->source_location, "Too many variables");
+    }
+    return 0xf8 - offset * 8;
 }

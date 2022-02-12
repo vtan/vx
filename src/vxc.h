@@ -61,7 +61,7 @@ struct ast_expr_node {
     enum ast_expr_node_type type;
     struct source_location source_location;
     union {
-        const char* variable;
+        struct lexeme* variable;
         uint64_t int_literal;
         struct {
             enum ast_binary_op_type type;
@@ -72,6 +72,7 @@ struct ast_expr_node {
 
 enum ast_stmt_node_type {
     AST_STMT_LET,
+    AST_STMT_SET,
     AST_STMT_SEQUENCE,
 };
 
@@ -80,9 +81,13 @@ struct ast_stmt_node {
     struct source_location source_location;
     union {
         struct {
-            const char* name;
+            struct lexeme* name;
             struct ast_expr_node* expr;
         } let;
+        struct {
+            struct lexeme* name;
+            struct ast_expr_node* expr;
+        } set;
         struct {
             struct ast_stmt_node* children[2];
         } sequence;

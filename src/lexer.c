@@ -9,7 +9,7 @@ enum current_lexeme_type {
     CUR_INT_LITERAL,
 };
 
-void push_lexeme(enum current_lexeme_type*, struct source_location, const char*, uint64_t);
+static void push_lexeme(enum current_lexeme_type*, struct source_location, const char*, uint64_t);
 
 void lex_file(FILE* file) {
     struct source_location location = {

@@ -8,9 +8,9 @@ vxc: $(wildcard src/*.c src/*.h)
 	$(CC) $(CFLAGS) -o $@ $(filter %.c, $^)
 
 clean:
-	rm -f vxc test.o test.out
+	rm -f vxc test/test.o test/test.out
 
 test: vxc
-	./vxc test/test.vx > test.o
-	ld test.o -o test.out
-	./test.out | xxd
+	./vxc test/test.vx > test/test.o
+	ld test/test.o -o test/test.out
+	./test/test.out | xxd
