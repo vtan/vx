@@ -1,0 +1,7 @@
+(
+  (let i 100)
+  (let sum 0)
+  (while i (
+    (set sum (+ sum i))
+    (set i (- i 1))))
+)

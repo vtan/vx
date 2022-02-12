@@ -49,6 +49,22 @@ struct ast_stmt_node* parse_statement(struct state* state) {
                     }
                 }));
                 result = &VEC_LAST(ast)->stmt;
+
+            } else if (strcmp(next->word, "while") == 0) {
+                struct ast_expr_node* condition = parse_expression(state);
+                struct ast_stmt_node* body = parse_statement(state);
+                VEC_PUSH(ast, ((union ast_node) {
+                    .stmt = {
+                        .type = AST_STMT_WHILE,
+                        .source_location = open_paren->source_location,
+                        .while_loop = {
+                            .condition = condition,
+                            .body = body,
+                        },
+                    }
+                }));
+                result = &VEC_LAST(ast)->stmt;
+
             } else {
                 compiler_error(&next->source_location, "Invalid statement keyword");
             }

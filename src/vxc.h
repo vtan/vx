@@ -74,6 +74,7 @@ enum ast_stmt_node_type {
     AST_STMT_LET,
     AST_STMT_SET,
     AST_STMT_SEQUENCE,
+    AST_STMT_WHILE,
 };
 
 struct ast_stmt_node {
@@ -91,6 +92,10 @@ struct ast_stmt_node {
         struct {
             struct ast_stmt_node* children[2];
         } sequence;
+        struct {
+            struct ast_expr_node* condition;
+            struct ast_stmt_node* body;
+        } while_loop;
     };
 };
 

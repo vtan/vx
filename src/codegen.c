@@ -75,6 +75,24 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
                 codegen_from_stmt(stmt->sequence.children[1]);
             }
             break;
+
+        case AST_STMT_WHILE: {
+            size_t ip_before_loop = program.size;
+            codegen_from_expr(stmt->while_loop.condition);
+            program_append(((uint8_t[]) { 0x48, 0x85, 0xc0 }));        // test rax, rax
+            program_append(((uint8_t[]) { 0x0f, 0x84, 0, 0, 0, 0 }));  // jz $+offset
+            size_t ip_jump_ahead = program.size;
+
+            codegen_from_stmt(stmt->while_loop.body);
+            program_append(((uint8_t[]) { 0xe9, 0, 0, 0, 0 }));        // jmp $-offset
+            size_t ip_end = program.size;
+
+            *((uint32_t*) (program.buf + ip_jump_ahead - 4)) =
+                (uint32_t) (ip_end - ip_jump_ahead);
+            *((uint32_t*) (program.buf + ip_end - 4)) =
+                (uint32_t) (ip_before_loop - ip_end);
+            break;
+        }
     }
 }
 
