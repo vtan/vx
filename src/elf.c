@@ -1,6 +1,6 @@
 #include "vxc.h"
 
-void write_elf(size_t program_size) {
+void write_elf() {
     Elf64_Ehdr header = {
         .e_ident = {
             0x7f, 'E', 'L', 'F',
@@ -42,7 +42,7 @@ void write_elf(size_t program_size) {
         .sh_type = SHT_PROGBITS,
         .sh_flags = SHF_ALLOC | SHF_EXECINSTR,
         .sh_offset = sizeof(Elf64_Ehdr) + 3 * sizeof(Elf64_Shdr) + section_string_table.sh_size,
-        .sh_size = program_size,
+        .sh_size = VEC_BYTES(program),
         .sh_addralign = 16,
     };
 
@@ -53,5 +53,5 @@ void write_elf(size_t program_size) {
     fwrite(section_name_null, sizeof(section_name_null), 1, stdout);
     fwrite(section_name_shstrtab, sizeof(section_name_shstrtab), 1, stdout);
     fwrite(section_name_text, sizeof(section_name_text), 1, stdout);
-    fwrite(program, program_size, 1, stdout);
+    fwrite(program.buf, VEC_BYTES(program), 1, stdout);
 }

@@ -1,32 +1,18 @@
 #include "vxc.h"
 
-uint8_t program[PROGRAM_MAX_SIZE];
-static uint8_t* program_next_byte = program;
+struct program program = {0};
 
-static inline void program_push_sized(const uint8_t* bytes, size_t size) {
-    if (program_next_byte - program + size > PROGRAM_MAX_SIZE) {
-        compiler_error("Program size exceeded buffer limit");
-    }
-    memcpy(program_next_byte, bytes, size);
-    program_next_byte += size;
-}
-#define program_push(bytes) (program_push_sized((bytes), sizeof(bytes)))
+#define program_append(array) VEC_APPEND(program, array)
 
-const char* local_variable_stack[256];
-const char** local_variable_stack_next = local_variable_stack;
+struct {
+    size_t size;
+    const char* buf[256];
+} local_variables;
 
-static inline void local_variable_push(const char* var) {
-    if (local_variable_stack_next - local_variable_stack == sizeof(local_variable_stack)) {
-        compiler_error("Local variable stack exceeded buffer limit");
-    }
-    *local_variable_stack_next = var;
-    ++local_variable_stack_next;
-}
-
-static inline const char** local_variable_find(const char* var) {
-    for (const char** p = local_variable_stack; p < local_variable_stack_next; ++p) {
-        if (strcmp(var, *p) == 0) {
-            return p;
+static inline const char** find_local_variable(const char* var) {
+    for (size_t i = 0; i < local_variables.size; ++i) {
+        if (strcmp(var, local_variables.buf[i]) == 0) {
+            return &local_variables.buf[i];
         }
     }
     return NULL;
@@ -65,19 +51,18 @@ static union ast_node ast_nodes[] = {
 static void codegen_from_stmt(struct ast_stmt_node*);
 static void codegen_from_expr(struct ast_expr_node*);
 
-size_t generate_code() {
-    program_push(program_start);
+void generate_code() {
+    program_append(program_start);
     codegen_from_stmt(&ast_nodes[0].stmt);
-    program_push(program_exit);
-    return program_next_byte - program;
+    program_append(program_exit);
 }
 
 static void codegen_from_stmt(struct ast_stmt_node* stmt) {
     switch (stmt->type) {
         case AST_STMT_LET:
             codegen_from_expr(stmt->let.expr);
-            program_push(((uint8_t[]) { 0x50 }));  // push rax
-            local_variable_push(stmt->let.name);
+            program_append(((uint8_t[]) { 0x50 }));  // push rax
+            VEC_PUSH(local_variables, stmt->let.name);
             break;
 
         case AST_STMT_SEQUENCE:
@@ -90,18 +75,18 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
 static void codegen_from_expr(struct ast_expr_node* expr) {
     switch (expr->type) {
         case AST_EXPR_VARIABLE: {
-            const char** p = local_variable_find(expr->variable);
+            const char** p = find_local_variable(expr->variable);
             if (p == NULL) {
                 compiler_error("Variable not found");
             }
-            int offset = p - local_variable_stack;
+            int offset = p - local_variables.buf;
             if (offset > 15) {
                 compiler_error("Too many variables");
             }
             int rbp_offset = 0xf8 - offset * 8;
             static uint8_t buf[] = { 0x48, 0x8b, 0x45, 0 }; // mov rax, [rbp - __]
             buf[3] = (uint8_t) rbp_offset;
-            program_push(buf);
+            program_append(buf);
             break;
         }
 
@@ -109,29 +94,29 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
             if (expr->int_literal <= 0xFFFFFFFF) {
                 static uint8_t buf[] = { 0xb8, 0, 0, 0, 0 }; // mov eax, __
                 *((uint32_t*) (buf + 1)) = (uint32_t) expr->int_literal;
-                program_push(buf);
+                program_append(buf);
             } else {
                 static uint8_t buf[] = { 0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0 }; // mov rax, __
                 *((uint64_t*) (buf + 2)) = expr->int_literal;
-                program_push(buf);
+                program_append(buf);
             }
             break;
 
         case AST_EXPR_BINARY_OP:
             codegen_from_expr(expr->binary_op.children[1]);
-            program_push(((uint8_t[]) { 0x50 }));  // push rax
+            program_append(((uint8_t[]) { 0x50 }));  // push rax
             codegen_from_expr(expr->binary_op.children[0]);
-            program_push(((uint8_t[]) { 0x5b }));  // pop rbx
+            program_append(((uint8_t[]) { 0x5b }));  // pop rbx
 
             switch (expr->binary_op.type) {
                 case AST_BINARY_OP_ADD:
-                    program_push(((uint8_t[]) {
+                    program_append(((uint8_t[]) {
                         0x48, 0x01, 0xd8,  // add rax, rbx
                     }));
                     break;
 
                 case AST_BINARY_OP_SUB:
-                    program_push(((uint8_t[]) {
+                    program_append(((uint8_t[]) {
                         0x48, 0x29, 0xd8,  // sub rax, rbx
                     }));
                     break;

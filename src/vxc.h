@@ -7,23 +7,34 @@
 #include <string.h>
 #include <linux/elf.h>
 
+#define ARRAY_SIZEOF(array) (sizeof((array)) / sizeof((array)[0]))
+
+#define VEC_PUSH(vec, item) { \
+    assert((vec).size < ARRAY_SIZEOF((vec).buf)); \
+    (vec).buf[(vec).size] = (item); \
+    ++(vec).size; \
+}
+#define VEC_APPEND(vec, array) { \
+    assert((vec).size + ARRAY_SIZEOF(array) <= ARRAY_SIZEOF((vec).buf)); \
+    memcpy((vec).buf + (vec).size, (array), sizeof((array))); \
+    (vec).size += ARRAY_SIZEOF(array); \
+}
+#define VEC_BYTES(vec) ((vec).size * sizeof((vec).buf[0]))
+
 void compiler_error(const char*);
 
 enum lexeme_type {
     LEX_PAREN_OPEN,
     LEX_PAREN_CLOSE,
-    LEX_IDENTIFIER,
+    LEX_WORD,
     LEX_INT_LITERAL,
-    LEX_LET,
-    LEX_PLUS,
-    LEX_MINUS,
 };
 
 struct lexeme {
     enum lexeme_type type;
     union {
-        const char* string;
-        uint64_t number;
+        const char* word;
+        uint64_t int_literal;
     };
 };
 
@@ -73,9 +84,22 @@ union ast_node {
     struct ast_stmt_node stmt;
 };
 
+#define AST_MAX_SIZE 4096
+struct ast {
+    size_t size;
+    union ast_node buf[AST_MAX_SIZE];
+};
+extern struct ast ast;
+
+struct ast_stmt_node* parse_lexemes();
+
 #define PROGRAM_MAX_SIZE 65536
-extern uint8_t program[PROGRAM_MAX_SIZE];
+struct program {
+    size_t size;
+    uint8_t buf[PROGRAM_MAX_SIZE];
+};
+extern struct program program;
 
-size_t generate_code();
+void generate_code();
 
-void write_elf(size_t program_size);
+void write_elf();
