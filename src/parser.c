@@ -3,8 +3,9 @@
 struct ast ast = {0};
 
 struct lexemes lexemes = {
-    .size = 13,
     .buf = {
+        { .type = LEX_PAREN_OPEN },
+
         { .type = LEX_PAREN_OPEN },
         { .type = LEX_WORD, .word = "let" },
         { .type = LEX_WORD, .word = "a" },
@@ -12,12 +13,43 @@ struct lexemes lexemes = {
         { .type = LEX_WORD, .word = "+" },
         { .type = LEX_PAREN_OPEN },
         { .type = LEX_WORD, .word = "-" },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x2000 },
-        { .type = LEX_INT_LITERAL, .int_literal = 0xD00 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x33 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x20 },
         { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x37 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x3700 },
         { .type = LEX_PAREN_CLOSE },
         { .type = LEX_PAREN_CLOSE },
+
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "let" },
+        { .type = LEX_WORD, .word = "b" },
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "+" },
+        { .type = LEX_INT_LITERAL, .int_literal = 0xef00 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0xbe },
+        { .type = LEX_PAREN_CLOSE },
+        { .type = LEX_PAREN_CLOSE },
+
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "let" },
+        { .type = LEX_WORD, .word = "c" },
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "+" },
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "+" },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x4200 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x41 },
+        { .type = LEX_PAREN_CLOSE },
+        { .type = LEX_PAREN_OPEN },
+        { .type = LEX_WORD, .word = "+" },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x44000000 },
+        { .type = LEX_INT_LITERAL, .int_literal = 0x430000 },
+        { .type = LEX_PAREN_CLOSE },
+        { .type = LEX_PAREN_CLOSE },
+        { .type = LEX_PAREN_CLOSE },
+
+        { .type = LEX_PAREN_CLOSE },
+        { .type = LEX_INT_LITERAL, .int_literal = -1 }
     },
 };
 
@@ -28,12 +60,19 @@ struct state {
 struct ast_stmt_node* parse_statement(struct state* state);
 struct ast_expr_node* parse_expression(struct state* state);
 
+struct lexeme* next_lexeme(struct state* state);
 struct lexeme* advance_lexeme(struct state* state);
 struct lexeme* expect_paren_open(struct state* state);
 void expect_paren_close(struct state* state);
 struct lexeme* expect_word(struct state* state);
 
 struct ast_stmt_node* parse_lexemes() {
+    // TODO: tmp
+    while (lexemes.buf[++lexemes.size].int_literal != (uint64_t)-1) {}
+    for (size_t i = 0; i < lexemes.size; ++i) {
+        lexemes.buf[i].source_location.column = i;
+    }
+
     struct state state = {
         .next_lexeme_index = 0
     };
@@ -49,24 +88,65 @@ struct ast_stmt_node* parse_statement(struct state* state) {
     struct ast_stmt_node* result = NULL;
 
     struct lexeme* open_paren = expect_paren_open(state);
-    struct lexeme* head = expect_word(state);
-    if (strcmp(head->word, "let") == 0) {
-        // TODO: check if not keyword
-        struct lexeme* variable_name = expect_word(state);
-        struct ast_expr_node* expr = parse_expression(state);
-        VEC_PUSH(ast, ((union ast_node) {
-            .stmt = {
-                .type = AST_STMT_LET,
-                .source_location = open_paren->source_location,
-                .let = {
-                    .name = variable_name->word,
-                    .expr = expr,
-                },
+    struct lexeme* next = advance_lexeme(state);
+    switch (next->type) {
+        case LEX_WORD:
+            if (strcmp(next->word, "let") == 0) {
+                // TODO: check if not keyword
+                struct lexeme* variable_name = expect_word(state);
+                struct ast_expr_node* expr = parse_expression(state);
+                VEC_PUSH(ast, ((union ast_node) {
+                    .stmt = {
+                        .type = AST_STMT_LET,
+                        .source_location = open_paren->source_location,
+                        .let = {
+                            .name = variable_name->word,
+                            .expr = expr,
+                        },
+                    }
+                }));
+                result = &VEC_LAST(ast)->stmt;
+            } else {
+                compiler_error(&next->source_location, "Invalid statement keyword");
             }
-        }));
-        result = &VEC_LAST(ast)->stmt;
-    } else {
-        compiler_error(&head->source_location, "Invalid statement keyword");
+            break;
+
+        case LEX_PAREN_OPEN:
+            --state->next_lexeme_index;
+            struct ast_stmt_node seq_start = {
+                .type = AST_STMT_SEQUENCE,
+                .source_location = open_paren->source_location,
+            };
+            struct ast_stmt_node* seq_last = &seq_start;
+
+            while (next_lexeme(state)->type != LEX_PAREN_CLOSE) {
+                struct ast_stmt_node* next_statement = parse_statement(state);
+                if (seq_last->sequence.children[0] == NULL) {
+                    seq_last->sequence.children[0] = next_statement;
+                } else {
+                    VEC_PUSH(ast, ((union ast_node) {
+                        .stmt = {
+                            .type = AST_STMT_SEQUENCE,
+                            .source_location = seq_start.source_location,
+                            .sequence = {
+                                .children = { next_statement, NULL }
+                            },
+                        }
+                    }));
+                    seq_last->sequence.children[1] = &VEC_LAST(ast)->stmt;
+                    seq_last = seq_last->sequence.children[1];
+                }
+            }
+            if (seq_last->sequence.children[0] == NULL) {
+                compiler_error(&seq_start.source_location, "Empty statement is not allowed");
+            } else {
+                VEC_PUSH(ast, ((union ast_node) { .stmt = seq_start }));
+                result = &VEC_LAST(ast)->stmt;
+            }
+            break;
+
+        default:
+            compiler_error(&next->source_location, "Invalid statement body");
     }
     expect_paren_close(state);
 
@@ -139,12 +219,18 @@ struct ast_expr_node* parse_expression(struct state* state) {
     }
 }
 
-struct lexeme* advance_lexeme(struct state* state) {
+struct lexeme* next_lexeme(struct state* state) {
     if (state->next_lexeme_index < lexemes.size) {
-        return &lexemes.buf[state->next_lexeme_index++];
+        return &lexemes.buf[state->next_lexeme_index];
     } else {
         compiler_error(NULL, "Unexpected end of file");
     }
+}
+
+struct lexeme* advance_lexeme(struct state* state) {
+    struct lexeme* lexeme = next_lexeme(state);
+    ++state->next_lexeme_index;
+    return lexeme;
 }
 
 struct lexeme* expect_paren_open(struct state* state) {

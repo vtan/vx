@@ -53,8 +53,11 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
             break;
 
         case AST_STMT_SEQUENCE:
+            assert(stmt->sequence.children[0] != NULL);
             codegen_from_stmt(stmt->sequence.children[0]);
-            codegen_from_stmt(stmt->sequence.children[1]);
+            if (stmt->sequence.children[1] != NULL) {
+                codegen_from_stmt(stmt->sequence.children[1]);
+            }
             break;
     }
 }
