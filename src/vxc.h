@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +94,13 @@ union ast_node {
     struct ast_stmt_node stmt;
 };
 
+#define STRINGS_MAX_SIZE 65536
+struct strings {
+    size_t size;
+    char buf[STRINGS_MAX_SIZE];
+};
+extern struct strings strings;
+
 #define LEXEMES_MAX_SZE 8192
 struct lexemes {
     size_t size;
@@ -114,6 +122,7 @@ struct program {
 };
 extern struct program program;
 
+void lex_file(FILE*);
 struct ast_stmt_node* parse_lexemes();
 void generate_code(struct ast_stmt_node* ast_root);
 void write_elf();

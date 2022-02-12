@@ -2,57 +2,6 @@
 
 struct ast ast = {0};
 
-struct lexemes lexemes = {
-    .buf = {
-        { .type = LEX_PAREN_OPEN },
-
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "let" },
-        { .type = LEX_WORD, .word = "a" },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "+" },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "-" },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x33 },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x20 },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x3700 },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_PAREN_CLOSE },
-
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "let" },
-        { .type = LEX_WORD, .word = "b" },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "+" },
-        { .type = LEX_INT_LITERAL, .int_literal = 0xef00 },
-        { .type = LEX_INT_LITERAL, .int_literal = 0xbe },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_PAREN_CLOSE },
-
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "let" },
-        { .type = LEX_WORD, .word = "c" },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "+" },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "+" },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x4200 },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x41 },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_PAREN_OPEN },
-        { .type = LEX_WORD, .word = "+" },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x44000000 },
-        { .type = LEX_INT_LITERAL, .int_literal = 0x430000 },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_PAREN_CLOSE },
-
-        { .type = LEX_PAREN_CLOSE },
-        { .type = LEX_INT_LITERAL, .int_literal = -1 }
-    },
-};
-
 struct state {
     size_t next_lexeme_index;
 };
@@ -67,12 +16,6 @@ void expect_paren_close(struct state* state);
 struct lexeme* expect_word(struct state* state);
 
 struct ast_stmt_node* parse_lexemes() {
-    // TODO: tmp
-    while (lexemes.buf[++lexemes.size].int_literal != (uint64_t)-1) {}
-    for (size_t i = 0; i < lexemes.size; ++i) {
-        lexemes.buf[i].source_location.column = i;
-    }
-
     struct state state = {
         .next_lexeme_index = 0
     };

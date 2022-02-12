@@ -11,6 +11,6 @@ clean:
 	rm -f vxc test.o test.out
 
 test: vxc
-	./vxc > test.o
+	./vxc test/test.vx > test.o
 	ld test.o -o test.out
 	./test.out | xxd
