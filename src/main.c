@@ -28,10 +28,10 @@ int main(int argc, const char** argv) {
     generate_code(ast_root);
     write_elf();
 
-    fprintf(stderr, "String bytes: %6lu\n",          strings.size);
-    fprintf(stderr, "Lexemes:      %6lu %8lu B\n", lexemes.size, VEC_BYTES(lexemes));
-    fprintf(stderr, "AST nodes:    %6lu %8lu B\n", ast.size,     VEC_BYTES(ast));
-    fprintf(stderr, "Code bytes:   %6lu\n",          program.size);
+    // fprintf(stderr, "String bytes: %6lu\n",          strings.size);
+    // fprintf(stderr, "Lexemes:      %6lu %8lu B\n", lexemes.size, VEC_BYTES(lexemes));
+    // fprintf(stderr, "AST nodes:    %6lu %8lu B\n", ast.size,     VEC_BYTES(ast));
+    // fprintf(stderr, "Code bytes:   %6lu\n",          program.size);
 }
 
 _Noreturn void compiler_error(struct source_location* location, const char* message) {
