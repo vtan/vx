@@ -37,6 +37,8 @@ static const uint8_t program_exit[] = {
 
 static void codegen_from_stmt(struct ast_stmt_node*);
 static void codegen_from_expr(struct ast_expr_node*);
+static void prepare_binary_args(struct ast_expr_node**);
+static void expect_args(struct ast_expr_node*, size_t, struct ast_expr_node**);
 static uint8_t rbp_offset_of_variable(struct lexeme*);
 static void reset_stack_to_var(size_t local_vars_before_loop);
 
@@ -174,35 +176,62 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
             }
             break;
 
-        case AST_EXPR_BINARY_OP:
-            codegen_from_expr(expr->binary_op.children[1]);
-            program_append(((uint8_t[]) { 0x50 }));  // push rax
-            codegen_from_expr(expr->binary_op.children[0]);
-            program_append(((uint8_t[]) { 0x5b }));  // pop rbx
+        case AST_EXPR_CALL: {
+            struct ast_expr_node* args[2];
+            if (strcmp(expr->call.name->word, "+") == 0) {
+                expect_args(expr, 2, args);
+                prepare_binary_args(args);
+                program_append(((uint8_t[]) { 0x48, 0x01, 0xd8 }));  // add rax, rbx
 
-            switch (expr->binary_op.type) {
-                case AST_BINARY_OP_ADD:
-                    program_append(((uint8_t[]) {
-                        0x48, 0x01, 0xd8,  // add rax, rbx
-                    }));
-                    break;
+            } else if (strcmp(expr->call.name->word, "-") == 0) {
+                expect_args(expr, 2, args);
+                prepare_binary_args(args);
+                program_append(((uint8_t[]) { 0x48, 0x29, 0xd8 }));  // sub rax, rbx
 
-                case AST_BINARY_OP_SUB:
-                    program_append(((uint8_t[]) {
-                        0x48, 0x29, 0xd8,  // sub rax, rbx
-                    }));
-                    break;
+            } else if (strcmp(expr->call.name->word, "=") == 0) {
+                expect_args(expr, 2, args);
+                prepare_binary_args(args);
+                program_append(((uint8_t[]) {
+                    0x48, 0x39, 0xd8,  // cmp rax, rbx
+                    0xb8, 0, 0, 0, 0,  // mov eax, 0
+                    0xbb, 1, 0, 0, 0,  // mov ebx, 1
+                    0x0f, 0x44, 0xc3,  // cmove eax, ebx
+                }));
 
-                case AST_BINARY_OP_EQ:
-                    program_append(((uint8_t[]) {
-                        0x48, 0x39, 0xd8,  // cmp rax, rbx
-                        0xb8, 0, 0, 0, 0,  // mov eax, 0
-                        0xbb, 1, 0, 0, 0,  // mov ebx, 1
-                        0x0f, 0x44, 0xc3,  // cmove eax, ebx
-                    }));
-                    break;
+            } else {
+                compiler_error(&expr->source_location, "Unknown function");
             }
             break;
+        }
+
+        case AST_EXPR_CALL_ARG:
+            assert(UNREACHABLE);
+    }
+}
+
+static void prepare_binary_args(struct ast_expr_node** args) {
+    codegen_from_expr(args[1]->call_arg.expr);
+    program_append(((uint8_t[]) { 0x50 }));  // push rax
+    codegen_from_expr(args[0]->call_arg.expr);
+    program_append(((uint8_t[]) { 0x5b }));  // pop rbx
+}
+
+static void expect_args(
+    struct ast_expr_node* call_node,
+    size_t count,
+    struct ast_expr_node** arg_nodes
+) {
+    struct ast_expr_node* next_arg_node = call_node->call.args_head;
+    while (count-- > 0) {
+        if (next_arg_node == NULL) {
+            compiler_error(&call_node->source_location, "Expected more arguments");
+        } else {
+            *(arg_nodes++) = next_arg_node;
+            next_arg_node = next_arg_node->call_arg.next;
+        }
+    }
+    if (next_arg_node != NULL) {
+        compiler_error(&call_node->source_location, "Expected fewer arguments");
     }
 }
 

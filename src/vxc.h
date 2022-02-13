@@ -23,12 +23,14 @@
 #define VEC_BYTES(vec) ((vec).size * sizeof((vec).buf[0]))
 #define VEC_LAST(vec) (&(vec).buf[(vec).size - 1])
 
+#define UNREACHABLE false
+
 struct source_location {
     uint32_t line;
     uint32_t column;
 };
 
-_Noreturn void compiler_error(struct source_location*, const char*);
+_Noreturn void compiler_error(const struct source_location*, const char*);
 
 enum lexeme_type {
     LEX_PAREN_OPEN,
@@ -49,13 +51,8 @@ struct lexeme {
 enum ast_expr_node_type {
     AST_EXPR_VARIABLE,
     AST_EXPR_INT_LITERAL,
-    AST_EXPR_BINARY_OP,
-};
-
-enum ast_binary_op_type {
-    AST_BINARY_OP_ADD,
-    AST_BINARY_OP_SUB,
-    AST_BINARY_OP_EQ,
+    AST_EXPR_CALL,
+    AST_EXPR_CALL_ARG,
 };
 
 struct ast_expr_node {
@@ -65,9 +62,13 @@ struct ast_expr_node {
         struct lexeme* variable;
         uint64_t int_literal;
         struct {
-            enum ast_binary_op_type type;
-            struct ast_expr_node* children[2];
-        } binary_op;
+            struct lexeme* name;
+            struct ast_expr_node* args_head;
+        } call;
+        struct {
+            struct ast_expr_node* expr;
+            struct ast_expr_node* next;
+        } call_arg;
     };
 };
 

@@ -34,7 +34,7 @@ int main(int argc, const char** argv) {
     // fprintf(stderr, "Code bytes:   %6lu\n",          program.size);
 }
 
-_Noreturn void compiler_error(struct source_location* location, const char* message) {
+_Noreturn void compiler_error(const struct source_location* location, const char* message) {
     if (location == NULL) {
         fprintf(stderr, "error: %s\n", message);
     } else {
