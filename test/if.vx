@@ -25,4 +25,10 @@
   (set b (= b 6))
   (set c (= c 8))
   (set n (= n 3))
+
+  (
+    (let write 1)
+    (let stdout 1)
+    (let _ (syscall write stdout (addr-of i) (* 5 8)))
+  )
 )

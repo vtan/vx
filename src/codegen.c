@@ -22,14 +22,6 @@ static const uint8_t program_start[] = {
     0x48, 0x89, 0xe5,              // mov rbp, rsp
 };
 static const uint8_t program_exit[] = {
-    // write pushed variables to stdout
-    0xb8, 0x01, 0x00, 0x00, 0x00,  // mov eax, 0x1
-    0xbf, 0x01, 0x00, 0x00, 0x00,  // mov edi, 0x1
-    0x48, 0x89, 0xe6,              // mov rsi, rsp
-    0x48, 0x89, 0xea,              // mov rdx, rbp
-    0x48, 0x29, 0xe2,              // sub rdx, rsp
-    0x0f, 0x05,                    // syscall
-    // exit
     0xb8, 0x3c, 0, 0, 0,  // mov eax, 0x3c
     0xbf, 0, 0, 0, 0,     // mov edi, 0
     0x0f, 0x05,           // syscall
@@ -88,12 +80,7 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
                 codegen_from_stmt(next->sequence.stmt);
                 next = next->sequence.tail;
             }
-
-            // TODO: remove this hack when we don't print the stack before exit anymore
-            bool is_root = stmt->source_location.column == 1 && stmt->source_location.line == 1;
-            if (!is_root) {
-                reset_stack_to_var(local_vars_before_block);
-            }
+            reset_stack_to_var(local_vars_before_block);
             break;
         }
 
@@ -185,7 +172,7 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
             break;
 
         case AST_EXPR_CALL: {
-            struct ast_expr_node* arg_exprs[2];
+            struct ast_expr_node* arg_exprs[4];
             if (strcmp(expr->call.name->word, "+") == 0) {
                 expect_args(expr, 2, arg_exprs);
                 prepare_binary_args(arg_exprs);
@@ -195,6 +182,11 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
                 expect_args(expr, 2, arg_exprs);
                 prepare_binary_args(arg_exprs);
                 program_append(((uint8_t[]) { 0x48, 0x29, 0xd8 }));  // sub rax, rbx
+
+            } else if (strcmp(expr->call.name->word, "*") == 0) {
+                expect_args(expr, 2, arg_exprs);
+                prepare_binary_args(arg_exprs);
+                program_append(((uint8_t[]) { 0x48, 0x0f, 0xaf, 0xc3 }));  // imul rax, rbx
 
             } else if (strcmp(expr->call.name->word, "=") == 0) {
                 expect_args(expr, 2, arg_exprs);
@@ -210,6 +202,18 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
                 expect_args(expr, 1, arg_exprs);
                 codegen_from_expr(arg_exprs[0]);
                 program_append(((uint8_t[]) { 0x48, 0x8b, 0x00 }));  // mov rax, [rax]
+
+            } else if (strcmp(expr->call.name->word, "syscall") == 0) {
+                expect_args(expr, 4, arg_exprs);
+                codegen_from_expr(arg_exprs[1]);
+                program_append(((uint8_t[]) { 0x50 }));  // push rax
+                codegen_from_expr(arg_exprs[2]);
+                program_append(((uint8_t[]) { 0x50 }));  // push rax
+                codegen_from_expr(arg_exprs[3]);
+                program_append(((uint8_t[]) { 0x50 }));  // push rax
+                codegen_from_expr(arg_exprs[0]);
+                program_append(((uint8_t[]) { 0x5a, 0x5e, 0x5f }));  // pop rdx, rsi, rdi
+                program_append(((uint8_t[]) { 0x0f, 0x05 }));        // syscall
 
             } else {
                 compiler_error(&expr->source_location, "Unknown function");

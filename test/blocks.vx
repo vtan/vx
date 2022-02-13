@@ -20,4 +20,10 @@
   (if d (
     (let tmp 0x1000)
     (set d (+ d tmp))))
+
+  (
+    (let write 1)
+    (let stdout 1)
+    (let _ (syscall write stdout (addr-of d) (* 5 8)))
+  )
 )

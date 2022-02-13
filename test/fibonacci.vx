@@ -9,4 +9,10 @@
     (set i (- i 1))
   ))
   (set b 0)
+
+  (
+    (let write 1)
+    (let stdout 1)
+    (let _ (syscall write stdout (addr-of i) (* 3 8)))
+  )
 )

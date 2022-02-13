@@ -5,4 +5,10 @@
   (let d 0x1000)
   (set d (+ d (- a 1)))
   (let e (= a 16))
+
+  (
+    (let write 1)
+    (let stdout 1)
+    (let _ (syscall write stdout (addr-of e) (* 5 8)))
+  )
 )
