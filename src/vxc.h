@@ -55,6 +55,7 @@ enum ast_expr_node_type {
 enum ast_binary_op_type {
     AST_BINARY_OP_ADD,
     AST_BINARY_OP_SUB,
+    AST_BINARY_OP_EQ,
 };
 
 struct ast_expr_node {

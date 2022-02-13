@@ -150,6 +150,15 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
                         0x48, 0x29, 0xd8,  // sub rax, rbx
                     }));
                     break;
+
+                case AST_BINARY_OP_EQ:
+                    program_append(((uint8_t[]) {
+                        0x48, 0x39, 0xd8,  // cmp rax, rbx
+                        0xb8, 0, 0, 0, 0,  // mov eax, 0
+                        0xbb, 1, 0, 0, 0,  // mov ebx, 1
+                        0x0f, 0x44, 0xc3,  // cmove eax, ebx
+                    }));
+                    break;
             }
             break;
     }

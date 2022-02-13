@@ -169,6 +169,21 @@ struct ast_expr_node* parse_expression(struct state* state) {
                     }
                 }));
                 return &VEC_LAST(ast)->expr;
+            } else if (strcmp(head->word, "=") == 0) {
+                struct ast_expr_node* arg1 = parse_expression(state);
+                struct ast_expr_node* arg2 = parse_expression(state);
+                expect_paren_close(state);
+                VEC_PUSH(ast, ((union ast_node) {
+                    .expr = {
+                        .type = AST_EXPR_BINARY_OP,
+                        .source_location = head->source_location,
+                        .binary_op = {
+                            .type = AST_BINARY_OP_EQ,
+                            .children = { arg1, arg2 },
+                        },
+                    }
+                }));
+                return &VEC_LAST(ast)->expr;
             } else {
                 compiler_error(&head->source_location, "Invalid function name");
             }
