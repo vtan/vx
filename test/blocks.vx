@@ -1,0 +1,19 @@
+(
+  (let a 0)
+  (
+    (let tmp 1)
+    (set a (+ a tmp))
+  )
+  (let b a)
+  (
+    (let tmp 0x10)
+    (set b (+ b tmp))
+  )
+  (let c b)
+  (let i 1)
+  (while i (
+    (let tmp 0x100)
+    (set c (+ c tmp))
+    (set i (- i 1))
+  ))
+)

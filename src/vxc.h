@@ -90,7 +90,8 @@ struct ast_stmt_node {
             struct ast_expr_node* expr;
         } set;
         struct {
-            struct ast_stmt_node* children[2];
+            struct ast_stmt_node* stmt;
+            struct ast_stmt_node* tail;
         } sequence;
         struct {
             struct ast_expr_node* condition;

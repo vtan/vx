@@ -38,6 +38,7 @@ static const uint8_t program_exit[] = {
 static void codegen_from_stmt(struct ast_stmt_node*);
 static void codegen_from_expr(struct ast_expr_node*);
 static uint8_t rbp_offset_of_variable(struct lexeme*);
+static void reset_stack_to_var(size_t local_vars_before_loop);
 
 void generate_code(struct ast_stmt_node* ast_root) {
     program_append(program_start);
@@ -68,13 +69,23 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
             break;
         }
 
-        case AST_STMT_SEQUENCE:
-            assert(stmt->sequence.children[0] != NULL);
-            codegen_from_stmt(stmt->sequence.children[0]);
-            if (stmt->sequence.children[1] != NULL) {
-                codegen_from_stmt(stmt->sequence.children[1]);
+        case AST_STMT_SEQUENCE: {
+            size_t local_vars_before_block = local_variables.size;
+
+            struct ast_stmt_node* next = stmt;
+            while (next != NULL) {
+                assert(next->sequence.stmt != NULL);
+                codegen_from_stmt(next->sequence.stmt);
+                next = next->sequence.tail;
+            }
+
+            // TODO: remove this hack when we don't print the stack before exit anymore
+            bool is_root = stmt->source_location.column == 1 && stmt->source_location.line == 1;
+            if (!is_root) {
+                reset_stack_to_var(local_vars_before_block);
             }
             break;
+        }
 
         case AST_STMT_WHILE: {
             size_t ip_before_loop = program.size;
@@ -83,7 +94,10 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
             program_append(((uint8_t[]) { 0x0f, 0x84, 0, 0, 0, 0 }));  // jz $+offset
             size_t ip_jump_ahead = program.size;
 
+            size_t local_vars_before_body = local_variables.size;
             codegen_from_stmt(stmt->while_loop.body);
+            reset_stack_to_var(local_vars_before_body);
+
             program_append(((uint8_t[]) { 0xe9, 0, 0, 0, 0 }));        // jmp $-offset
             size_t ip_end = program.size;
 
@@ -151,4 +165,26 @@ static uint8_t rbp_offset_of_variable(struct lexeme* lexeme) {
         compiler_error(&lexeme->source_location, "Too many variables");
     }
     return 0xf8 - offset * 8;
+}
+
+static void reset_stack_to_var(size_t reset_size) {
+    if (local_variables.size != reset_size) {
+        size_t diff_bytes = 8 * (local_variables.size - reset_size);
+        if (reset_size == 0) {
+            program_append(((uint8_t[]) {
+                0x48, 0x89, 0xec,  // mov rsp, rbp
+            }));
+        } else if (diff_bytes < 0x80) {
+            program_append(((uint8_t[]) {
+                0x48, 0x83, 0xc4, 0,  // add rsp, imm8
+            }));
+            program.buf[program.size - 1] = diff_bytes;
+        } else {
+            program_append(((uint8_t[]) {
+                0x48, 0x81, 0xc4, 0, 0, 0, 0,  // add rsp, imm32
+            }));
+            *((uint32_t*) &program.buf[program.size - 4]) = diff_bytes;
+        }
+        local_variables.size = reset_size;
+    }
 }

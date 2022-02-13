@@ -80,23 +80,24 @@ struct ast_stmt_node* parse_statement(struct state* state) {
 
             while (next_lexeme(state)->type != LEX_PAREN_CLOSE) {
                 struct ast_stmt_node* next_statement = parse_statement(state);
-                if (seq_last->sequence.children[0] == NULL) {
-                    seq_last->sequence.children[0] = next_statement;
+                if (seq_last->sequence.stmt == NULL) {
+                    seq_last->sequence.stmt = next_statement;
                 } else {
                     VEC_PUSH(ast, ((union ast_node) {
                         .stmt = {
                             .type = AST_STMT_SEQUENCE,
                             .source_location = seq_start.source_location,
                             .sequence = {
-                                .children = { next_statement, NULL }
+                                .stmt = next_statement,
+                                .tail = NULL,
                             },
                         }
                     }));
-                    seq_last->sequence.children[1] = &VEC_LAST(ast)->stmt;
-                    seq_last = seq_last->sequence.children[1];
+                    seq_last->sequence.tail = &VEC_LAST(ast)->stmt;
+                    seq_last = seq_last->sequence.tail;
                 }
             }
-            if (seq_last->sequence.children[0] == NULL) {
+            if (seq_last->sequence.stmt == NULL) {
                 compiler_error(&seq_start.source_location, "Empty statement is not allowed");
             } else {
                 VEC_PUSH(ast, ((union ast_node) { .stmt = seq_start }));
