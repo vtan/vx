@@ -53,6 +53,7 @@ enum ast_expr_node_type {
     AST_EXPR_INT_LITERAL,
     AST_EXPR_CALL,
     AST_EXPR_CALL_ARG,
+    AST_EXPR_ADDR_OF,
 };
 
 struct ast_expr_node {
@@ -78,6 +79,7 @@ enum ast_stmt_node_type {
     AST_STMT_SEQUENCE,
     AST_STMT_WHILE,
     AST_STMT_IF,
+    AST_STMT_STORE,
 };
 
 struct ast_stmt_node {
@@ -105,6 +107,11 @@ struct ast_stmt_node {
             struct ast_stmt_node* body;
             struct ast_stmt_node* next;
         } if_chain;
+        struct {
+            uint8_t bytes;
+            struct ast_expr_node* destination;
+            struct ast_expr_node* value;
+        } store;
     };
 };
 

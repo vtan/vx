@@ -65,9 +65,17 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
         case AST_STMT_SET: {
             codegen_from_expr(stmt->set.expr);
             static uint8_t buf[] = { 0x48, 0x89, 0x45, 0 }; // mov [rbp - __], rax
-            int rbp_offset = rbp_offset_of_variable(stmt->set.name);
+            int rbp_offset = 0x100 - rbp_offset_of_variable(stmt->set.name);
             buf[3] = (uint8_t) rbp_offset;
             program_append(buf);
+            break;
+        }
+
+        case AST_STMT_STORE: {
+            assert(stmt->store.bytes == 8);
+            struct ast_expr_node* args[] = { stmt->store.destination, stmt->store.value };
+            prepare_binary_args(args);
+            program_append(((uint8_t[]) { 0x48, 0x89, 0x18 }));  // mov [rax], rbx
             break;
         }
 
@@ -158,7 +166,7 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
     switch (expr->type) {
         case AST_EXPR_VARIABLE: {
             static uint8_t buf[] = { 0x48, 0x8b, 0x45, 0 }; // mov rax, [rbp - __]
-            int rbp_offset = rbp_offset_of_variable(expr->variable);
+            int rbp_offset = 0x100 - rbp_offset_of_variable(expr->variable);
             buf[3] = (uint8_t) rbp_offset;
             program_append(buf);
             break;
@@ -177,20 +185,20 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
             break;
 
         case AST_EXPR_CALL: {
-            struct ast_expr_node* args[2];
+            struct ast_expr_node* arg_exprs[2];
             if (strcmp(expr->call.name->word, "+") == 0) {
-                expect_args(expr, 2, args);
-                prepare_binary_args(args);
+                expect_args(expr, 2, arg_exprs);
+                prepare_binary_args(arg_exprs);
                 program_append(((uint8_t[]) { 0x48, 0x01, 0xd8 }));  // add rax, rbx
 
             } else if (strcmp(expr->call.name->word, "-") == 0) {
-                expect_args(expr, 2, args);
-                prepare_binary_args(args);
+                expect_args(expr, 2, arg_exprs);
+                prepare_binary_args(arg_exprs);
                 program_append(((uint8_t[]) { 0x48, 0x29, 0xd8 }));  // sub rax, rbx
 
             } else if (strcmp(expr->call.name->word, "=") == 0) {
-                expect_args(expr, 2, args);
-                prepare_binary_args(args);
+                expect_args(expr, 2, arg_exprs);
+                prepare_binary_args(arg_exprs);
                 program_append(((uint8_t[]) {
                     0x48, 0x39, 0xd8,  // cmp rax, rbx
                     0xb8, 0, 0, 0, 0,  // mov eax, 0
@@ -198,9 +206,22 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
                     0x0f, 0x44, 0xc3,  // cmove eax, ebx
                 }));
 
+            } else if (strcmp(expr->call.name->word, "load64") == 0) {
+                expect_args(expr, 1, arg_exprs);
+                codegen_from_expr(arg_exprs[0]);
+                program_append(((uint8_t[]) { 0x48, 0x8b, 0x00 }));  // mov rax, [rax]
+
             } else {
                 compiler_error(&expr->source_location, "Unknown function");
             }
+            break;
+        }
+
+        case AST_EXPR_ADDR_OF: {
+            program_append(((uint8_t[]) { 0x48, 0x89, 0xe8 }));     // mov rax, rbp
+            program_append(((uint8_t[]) { 0x48, 0x83, 0xe8, 0 }));  // sub rax, imm8
+            int rbp_offset = rbp_offset_of_variable(expr->variable);
+            program.buf[program.size - 1] = rbp_offset;
             break;
         }
 
@@ -209,24 +230,24 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
     }
 }
 
-static void prepare_binary_args(struct ast_expr_node** args) {
-    codegen_from_expr(args[1]->call_arg.expr);
+static void prepare_binary_args(struct ast_expr_node** exprs) {
+    codegen_from_expr(exprs[1]);
     program_append(((uint8_t[]) { 0x50 }));  // push rax
-    codegen_from_expr(args[0]->call_arg.expr);
+    codegen_from_expr(exprs[0]);
     program_append(((uint8_t[]) { 0x5b }));  // pop rbx
 }
 
 static void expect_args(
     struct ast_expr_node* call_node,
     size_t count,
-    struct ast_expr_node** arg_nodes
+    struct ast_expr_node** expr_nodes
 ) {
     struct ast_expr_node* next_arg_node = call_node->call.args_head;
     while (count-- > 0) {
         if (next_arg_node == NULL) {
             compiler_error(&call_node->source_location, "Expected more arguments");
         } else {
-            *(arg_nodes++) = next_arg_node;
+            *(expr_nodes++) = next_arg_node->call_arg.expr;
             next_arg_node = next_arg_node->call_arg.next;
         }
     }
@@ -240,11 +261,12 @@ static uint8_t rbp_offset_of_variable(struct lexeme* lexeme) {
     if (p == NULL) {
         compiler_error(&lexeme->source_location, "Variable not found");
     }
-    int offset = p - local_variables.buf;
+    // Local variables start _after_ rbp (viewing from the top of the stack), hence the +1
+    int offset = p - local_variables.buf + 1;
     if (offset > 15) {
         compiler_error(&lexeme->source_location, "Too many variables");
     }
-    return 0xf8 - offset * 8;
+    return offset * 8;
 }
 
 static void reset_stack_to_var(size_t reset_size) {

@@ -8,6 +8,7 @@ struct state {
 
 static struct ast_stmt_node* parse_statement(struct state* state);
 static struct ast_expr_node* parse_expression(struct state* state);
+static struct ast_expr_node* parse_call_expression(struct lexeme* name, struct state* state);
 
 static struct lexeme* next_lexeme(struct state* state);
 static struct lexeme* advance_lexeme(struct state* state);
@@ -46,6 +47,22 @@ struct ast_stmt_node* parse_statement(struct state* state) {
                             .name = variable_name,
                             .expr = expr,
                         },
+                    }
+                }));
+                result = &VEC_LAST(ast)->stmt;
+
+            } else if (strcmp(next->word, "store64") == 0) {
+                struct ast_expr_node* destination = parse_expression(state);
+                struct ast_expr_node* value = parse_expression(state);
+                VEC_PUSH(ast, ((union ast_node) {
+                    .stmt = {
+                        .type = AST_STMT_STORE,
+                        .source_location = open_paren->source_location,
+                        .store = {
+                            .bytes = 8,
+                            .destination = destination,
+                            .value = value,
+                        }
                     }
                 }));
                 result = &VEC_LAST(ast)->stmt;
@@ -174,41 +191,59 @@ struct ast_expr_node* parse_expression(struct state* state) {
 
         case LEX_PAREN_OPEN: {
             struct lexeme* name = expect_word(state);
-            VEC_PUSH(ast, ((union ast_node) {
-                .expr = {
-                    .type = AST_EXPR_CALL,
-                    .source_location = name->source_location,
-                    .call = {
-                        .name = name,
-                        .args_head = NULL,
-                    },
-                }
-            }));
-            struct ast_expr_node* call_node = &VEC_LAST(ast)->expr;
-            struct ast_expr_node** next_arg = &call_node->call.args_head;
-            while (next_lexeme(state)->type != LEX_PAREN_CLOSE) {
-                struct ast_expr_node* expr = parse_expression(state);
+            if (strcmp(name->word, "addr-of") == 0) {
+                struct lexeme* variable = expect_word(state);
+                expect_paren_close(state);
                 VEC_PUSH(ast, ((union ast_node) {
                     .expr = {
-                        .type = AST_EXPR_CALL_ARG,
-                        .source_location = expr->source_location,
-                        .call_arg = {
-                            .expr = expr,
-                            .next = NULL,
-                        },
+                        .type = AST_EXPR_ADDR_OF,
+                        .source_location = lexeme->source_location,
+                        .variable = variable,
                     }
                 }));
-                *next_arg = &VEC_LAST(ast)->expr;
-                next_arg = &(*next_arg)->call_arg.next;
+                return &VEC_LAST(ast)->expr;
+
+            } else {
+                return parse_call_expression(name, state);
             }
-            expect_paren_close(state);
-            return call_node;
         }
 
         case LEX_PAREN_CLOSE:
             compiler_error(&lexeme->source_location, "Unexpected closing parenthesis in expression");
     }
     assert(UNREACHABLE);
+}
+
+static struct ast_expr_node* parse_call_expression(struct lexeme* name, struct state* state) {
+    VEC_PUSH(ast, ((union ast_node) {
+        .expr = {
+            .type = AST_EXPR_CALL,
+            .source_location = name->source_location,
+            .call = {
+                .name = name,
+                .args_head = NULL,
+            },
+        }
+    }));
+    struct ast_expr_node* call_node = &VEC_LAST(ast)->expr;
+    struct ast_expr_node** next_arg = &call_node->call.args_head;
+    while (next_lexeme(state)->type != LEX_PAREN_CLOSE) {
+        struct ast_expr_node* expr = parse_expression(state);
+        VEC_PUSH(ast, ((union ast_node) {
+            .expr = {
+                .type = AST_EXPR_CALL_ARG,
+                .source_location = expr->source_location,
+                .call_arg = {
+                    .expr = expr,
+                    .next = NULL,
+                },
+            }
+        }));
+        *next_arg = &VEC_LAST(ast)->expr;
+        next_arg = &(*next_arg)->call_arg.next;
+    }
+    expect_paren_close(state);
+    return call_node;
 }
 
 struct lexeme* next_lexeme(struct state* state) {
