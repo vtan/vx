@@ -65,6 +65,41 @@ struct ast_stmt_node* parse_statement(struct state* state) {
                 }));
                 result = &VEC_LAST(ast)->stmt;
 
+            } else if (strcmp(next->word, "if") == 0) {
+                VEC_PUSH(ast, ((union ast_node) {
+                    .stmt = {
+                        .type = AST_STMT_IF,
+                        .source_location = open_paren->source_location,
+                        .if_chain = {0},
+                    }
+                }));
+                struct ast_stmt_node* if_head = &VEC_LAST(ast)->stmt;
+                struct ast_stmt_node* last = if_head;
+
+                while (next_lexeme(state)->type != LEX_PAREN_CLOSE) {
+                    struct ast_expr_node* condition = parse_expression(state);
+                    struct ast_stmt_node* body = parse_statement(state);
+
+                    if (last->if_chain.condition != NULL) {
+                        VEC_PUSH(ast, ((union ast_node) {
+                            .stmt = {
+                                .type = AST_STMT_IF,
+                                .source_location = open_paren->source_location,
+                                .if_chain = {0},
+                            }
+                        }));
+                        struct ast_stmt_node* next = &VEC_LAST(ast)->stmt;
+                        last->if_chain.next = next;
+                        last = next;
+                    }
+                    last->if_chain.condition = condition;
+                    last->if_chain.body = body;
+                }
+                if (if_head->if_chain.condition == NULL) {
+                    compiler_error(&open_paren->source_location, "Empty if is not allowed");
+                }
+                result = if_head;
+
             } else {
                 compiler_error(&next->source_location, "Invalid statement keyword");
             }

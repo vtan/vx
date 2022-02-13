@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o pipefail
+
 status=0
 successes=0
 failures=0
@@ -34,7 +36,15 @@ for testfile in "$@"; do
   if [ $record = 1 ]; then
     "$outfile" | xxd > "$stdoutfile"
   else
-    diff --color=auto --unified=0 --new-file "$stdoutfile" <("$outfile" | xxd)
+    output=$("$outfile" | xxd)
+    if [ $? -ne 0 ]; then
+      echo "$outfile exited with non-zero exit code"
+      status=1
+      ((failures += 1))
+      continue
+    fi
+
+    diff --color=auto --unified=0 --new-file "$stdoutfile" <(echo "$output" )
     if [ $? = 0 ]; then
       ((successes += 1))
     else

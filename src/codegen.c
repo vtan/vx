@@ -107,6 +107,48 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
                 (uint32_t) (ip_before_loop - ip_end);
             break;
         }
+
+        case AST_STMT_IF: {
+            static uint32_t ips_after_jump_to_end[32];
+            size_t next_branch_index = 0;
+            size_t last_ip_after_jump_to_next_branch = -1;
+
+            struct ast_stmt_node* cur = stmt;
+            while (cur != NULL) {
+                if (next_branch_index >= ARRAY_SIZEOF(ips_after_jump_to_end)) {
+                    compiler_error(&cur->source_location, "Maximum number of branches exceeded");
+                }
+
+                if (last_ip_after_jump_to_next_branch != (size_t) -1) {
+                    *((uint32_t*) (program.buf + last_ip_after_jump_to_next_branch - 4)) =
+                        (program.size - last_ip_after_jump_to_next_branch);
+                }
+                codegen_from_expr(cur->if_chain.condition);
+                program_append(((uint8_t[]) { 0x48, 0x85, 0xc0 }));        // test rax, rax
+                program_append(((uint8_t[]) { 0x0f, 0x84, 0, 0, 0, 0 }));  // jz $+offset
+                last_ip_after_jump_to_next_branch = program.size;
+
+                size_t local_vars_before_body = local_variables.size;
+                codegen_from_stmt(cur->if_chain.body);
+                reset_stack_to_var(local_vars_before_body);
+
+                program_append(((uint8_t[]) { 0xe9, 0, 0, 0, 0 }));        // jmp $+offset
+                ips_after_jump_to_end[next_branch_index] = program.size;
+
+                cur = cur->if_chain.next;
+                ++next_branch_index;
+            }
+
+            assert(last_ip_after_jump_to_next_branch != (size_t) -1);
+            *((uint32_t*) (program.buf + last_ip_after_jump_to_next_branch - 4)) =
+                (program.size - last_ip_after_jump_to_next_branch);
+
+            for (size_t i = 0; i < next_branch_index; ++i) {
+                *((uint32_t*) (program.buf + ips_after_jump_to_end[i] - 4)) =
+                    (program.size - ips_after_jump_to_end[i]);
+            }
+            break;
+        }
     }
 }
 
