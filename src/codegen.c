@@ -64,10 +64,21 @@ static void codegen_from_stmt(struct ast_stmt_node* stmt) {
         }
 
         case AST_STMT_STORE: {
-            assert(stmt->store.bytes == 8);
-            struct ast_expr_node* args[] = { stmt->store.destination, stmt->store.value };
-            prepare_binary_args(args);
-            program_append(((uint8_t[]) { 0x48, 0x89, 0x18 }));  // mov [rax], rbx
+            switch (stmt->store.bytes) {
+                case 1: {
+                    struct ast_expr_node* args[] = { stmt->store.destination, stmt->store.value };
+                    prepare_binary_args(args);
+                    program_append(((uint8_t[]) { 0x88, 0x18 }));        // mov [rax], bl
+                    break;
+                }
+                case 8: {
+                    struct ast_expr_node* args[] = { stmt->store.destination, stmt->store.value };
+                    prepare_binary_args(args);
+                    program_append(((uint8_t[]) { 0x48, 0x89, 0x18 }));  // mov [rax], rbx
+                    break;
+                }
+                default: assert(false);
+            }
             break;
         }
 
@@ -197,6 +208,11 @@ static void codegen_from_expr(struct ast_expr_node* expr) {
                     0xbb, 1, 0, 0, 0,  // mov ebx, 1
                     0x0f, 0x44, 0xc3,  // cmove eax, ebx
                 }));
+
+            } else if (strcmp(expr->call.name->word, "load8") == 0) {
+                expect_args(expr, 1, arg_exprs);
+                codegen_from_expr(arg_exprs[0]);
+                program_append(((uint8_t[]) { 0x48, 0x0f, 0xb6, 0x00 }));  // movzx rax, byte [rax]
 
             } else if (strcmp(expr->call.name->word, "load64") == 0) {
                 expect_args(expr, 1, arg_exprs);

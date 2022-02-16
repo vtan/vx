@@ -51,6 +51,22 @@ struct ast_stmt_node* parse_statement(struct state* state) {
                 }));
                 result = &VEC_LAST(ast)->stmt;
 
+            } else if (strcmp(next->word, "store8") == 0) {
+                struct ast_expr_node* destination = parse_expression(state);
+                struct ast_expr_node* value = parse_expression(state);
+                VEC_PUSH(ast, ((union ast_node) {
+                    .stmt = {
+                        .type = AST_STMT_STORE,
+                        .source_location = open_paren->source_location,
+                        .store = {
+                            .bytes = 1,
+                            .destination = destination,
+                            .value = value,
+                        }
+                    }
+                }));
+                result = &VEC_LAST(ast)->stmt;
+
             } else if (strcmp(next->word, "store64") == 0) {
                 struct ast_expr_node* destination = parse_expression(state);
                 struct ast_expr_node* value = parse_expression(state);

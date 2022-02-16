@@ -1,13 +1,17 @@
 (
+  (let p 0)
   (let a 1)
-  (let p (addr-of a))
+  (set p (addr-of a))
   (let b (load64 p))
   (store64 p (+ b 1))
   (set p 0)
+  (let c 0x1337)
+  (let d (load8 (+ (addr-of c) 1)))
+  (store64 (+ (addr-of c) 1) (+ 1 d))
 
   (
     (let write 1)
     (let stdout 1)
-    (let _ (syscall write stdout (addr-of b) (* 3 8)))
+    (let _ (syscall write stdout (addr-of d) (* 4 8)))
   )
 )
