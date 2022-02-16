@@ -1,0 +1,62 @@
+(
+  (let input      0x402000)
+  (let output     0x402800)
+  (let tape       0x403000)
+  (let jump-stack 0x403f00)
+  (let input-index      0)
+  (let output-index     0)
+  (let tape-index       0)
+  (let jump-stack-index 0)
+
+  (let read 0)
+  (let stdin 0)
+  (let input-size 0)
+  (let read-bytes 1)
+  (while read-bytes (
+    (set read-bytes (syscall read stdin input (- output (+ input input-size))))
+    (set input-size (+ input-size read-bytes))
+  ))
+
+  (while (- input-size input-index) (
+    (let input-char (load8 (+ input input-index)))
+    (let tape-byte  (load8 (+ tape tape-index)))
+    (if
+      (= input-char 0x3C) (set tape-index (- tape-index 1))
+      (= input-char 0x3E) (set tape-index (+ tape-index 1))
+      (= input-char 0x2B) (store8 (+ tape tape-index) (+ tape-byte 1))
+      (= input-char 0x2D) (store8 (+ tape tape-index) (- tape-byte 1))
+      (= input-char 0x2E) (
+        (store8 (+ output output-index) tape-byte)
+        (set output-index (+ output-index 1))
+      )
+      (= input-char 0x5B) (
+        (if
+          (= tape-byte 0) (
+            (let skip-brackets 1)
+            (while skip-brackets (
+              (set input-index (+ input-index 1))
+              (set input-char (load8 (+ input input-index)))
+              (if
+                (= input-char 0x5B) (set skip-brackets (+ skip-brackets 1))
+                (= input-char 0x5D) (set skip-brackets (- skip-brackets 1))
+              )
+            ))
+          )
+          1 (
+            (store64 (+ jump-stack jump-stack-index) input-index)
+            (set jump-stack-index (+ jump-stack-index 8))
+          )
+        )
+      )
+      (= input-char 0x5D) (
+        (set jump-stack-index (- jump-stack-index 8))
+        (set input-index (- (load64 (+ jump-stack jump-stack-index)) 1))
+      )
+    )
+    (set input-index (+ input-index 1))
+  ))
+
+  (let write 1)
+  (let stdout 1)
+  (let _ (syscall write stdout output output-index))
+)

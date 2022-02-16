@@ -16,6 +16,7 @@ for testfile in "$@"; do
   objfile="${testfile%.vx}.o"
   outfile="${testfile%.vx}.out"
   stdoutfile="$testfile.stdout"
+  stdinfile="$testfile.stdin"
 
 	./vxc "$testfile" > "$objfile"
   if [ $? -ne 0 ]; then
@@ -33,10 +34,16 @@ for testfile in "$@"; do
     continue
   fi
 
-  if [ $record = 1 ]; then
-    "$outfile" | xxd > "$stdoutfile"
+  if [ -f "$stdinfile" ]; then
+    stdin=$(cat "$stdinfile")
   else
-    output=$("$outfile" | xxd)
+    stdin=''
+  fi
+
+  if [ $record = 1 ]; then
+    "$outfile" <<< "$stdin" | xxd > "$stdoutfile"
+  else
+    stdout=$("$outfile" <<< "$stdin" | xxd)
     if [ $? -ne 0 ]; then
       echo "$outfile exited with non-zero exit code"
       status=1
@@ -44,7 +51,7 @@ for testfile in "$@"; do
       continue
     fi
 
-    diff --color=auto --unified=0 --new-file "$stdoutfile" <(echo "$output" )
+    diff --color=auto --unified=0 --new-file "$stdoutfile" <(echo "$stdout" )
     if [ $? = 0 ]; then
       ((successes += 1))
     else
